@@ -142,38 +142,12 @@ def qae3(probability, max_grover_depth, eps, delta):
         grover_depths[idx]
 
 def qae4(probability, max_grover_depth, eps, delta, jittigate=False):
-    shots = calculate_Nshot(max_grover_depth, eps, delta)
-    grover_depths_nojitter = calc_depths(max_grover_depth)
+    grover_depths, shot_scales = calc_depths(max_grover_depth, \
+        jittigate=jittigate)
+    shots = calculate_Nshot(max_grover_depth, eps, delta, jittigate=jittigate)
+    shots_array = np.array([int(np.ceil(x)) for x in (shots*shot_scales)])
     total_shots, total_calls = 0, 0
     zeros = []
-    jittigate_now = False
-    shots_array = []
-    grover_depths = []
-    for j, grover_depth in enumerate(grover_depths_nojitter):
-        #if grover_depth == grover_depths_nojitter[-1]:
-        if grover_depth > 0:
-            jittigate_now = True
-        if not jittigate_now:
-            grover_depths += [grover_depth]
-            shots_array += [shots]
-            continue
-        gdspread = np.log(2*grover_depth)
-        if grover_depth - gdspread <= grover_depths_nojitter[j-1]:
-            grover_depths += [grover_depth]
-            shots_array += [shots]
-            continue
-        gdcurrmin = np.max((grover_depths_nojitter[j-1]+1, \
-            int(np.round(grover_depth-gdspread))))
-        if grover_depth == grover_depths_nojitter[-1]:
-            gdcurrmax = grover_depths_nojitter[-1]
-        else:
-            gdcurrmax = np.min((grover_depths_nojitter[j+1]-1, \
-                int(np.round(grover_depth+gdspread))))          
-        grover_depths_current = list(range(gdcurrmin, gdcurrmax+1))
-        shots_curr = int(np.ceil(shots/len(grover_depths_current)))
-        grover_depths += grover_depths_current
-        shots_array += [shots_curr]*len(grover_depths_current)
-
     #print(grover_depths)
     #print(shots_array)
     grover_depths = np.array(grover_depths)
@@ -191,7 +165,7 @@ def qae4(probability, max_grover_depth, eps, delta, jittigate=False):
     probability_est = abstract_qae.probability_from_theta(theta_est)
     return probability_est, total_shots, total_calls, shots
 
-def calc_depths(maxdepth):
+def calc_depths(maxdepth, jittigate=False):
     if maxdepth == 0:
         return np.array([0])
     elif maxdepth == 1:
@@ -208,24 +182,62 @@ def calc_depths(maxdepth):
     mks = np.array([0] + [int(np.round(base**k)) for k in range(kmax+1)], \
         dtype=int)
 
-    return mks
+    if jittigate:
+        mks, shot_scales = jitter_depths(mks)
+    else:
+        shot_scales = np.ones(len(mks))
+    return mks, shot_scales
 
-def _Smoment(maxdepth, power):
-    mks = calc_depths(maxdepth)
-    return np.sum( ( ( (2*mks) + 1 )**power ) )**(1/power)
+def jitter_depths(depths_nojitter):
+    jittigate_now = False
+    shot_scales = []
+    depths = []
+    for j, depth in enumerate(depths_nojitter):
+        #if grover_depth == grover_depths_nojitter[-1]:
+        if depth > 0:
+            jittigate_now = True
+        if not jittigate_now:
+            depths += [depth]
+            shot_scales += [1.0]
+            continue
+        dspread = np.log(2*depth)
+        if depth - dspread <= depths_nojitter[j-1]:
+            depths += [depth]
+            shot_scales += [1.0]
+            continue
+        dcurrmin = np.max((depths_nojitter[j-1]+1, \
+            int(np.round(depth-dspread))))
+        if depth == depths_nojitter[-1]:
+            dcurrmax = depths_nojitter[-1]
+        else:
+            dcurrmax = np.min((depths_nojitter[j+1]-1, \
+                int(np.round(depth+dspread))))          
+        depths_current = list(range(dcurrmin, dcurrmax+1))
+        scale_curr = 1.0/len(depths_current)
+        depths += depths_current
+        shot_scales += [scale_curr]*len(depths_current)
+    depths = np.array(depths)
+    shot_scales = np.array(shot_scales)
+    return depths, shot_scales
 
-def S1(maxdepth, depth_jitter=None):
-    return _Smoment(maxdepth, 1)
+def _Smoment(maxdepth, power, jittigate=False):
+    mks, shot_scales = calc_depths(maxdepth, jittigate=jittigate)
+    tmp = ((2*mks) + 1)**power
+    tmp = tmp*shot_scales
+    return np.sum( tmp )**(1/power)
 
-def S2(maxdepth, depth_jitter=None):
-    return _Smoment(maxdepth, 2)
+def S1(maxdepth, jittigate=False):
+    return _Smoment(maxdepth, 1, jittigate=jittigate)
 
-def calculate_Nshot(maxdepth, eps, delta):
+def S2(maxdepth, jittigate=False):
+    return _Smoment(maxdepth, 2, jittigate=jittigate)
+
+def calculate_Nshot(maxdepth, eps, delta, jittigate=False):
     num = erfinv(1-delta)**2
-    denom = 2 * ((S2(maxdepth)*eps)**2)
+    denom = 2 * ((S2(maxdepth, jittigate=jittigate)*eps)**2)
     return int(np.ceil(num/denom))
 
-def calculate_eps(maxdepth, Nshot, delta):
+def calculate_eps(maxdepth, Nshot, delta, jittigate=False):
     num = erfinv(1-delta)
-    denom = np.sqrt(2) * S2(maxdepth) * np.sqrt(Nshot)
+    denom = np.sqrt(2) * S2(maxdepth, jittigate=jittigate) * np.sqrt(Nshot)
     return num/denom
