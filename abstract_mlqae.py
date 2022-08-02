@@ -185,10 +185,15 @@ def qae_disambiguate(probability, max_grover_depth, eps, delta):
     return probability_est_out, total_shots, total_calls, shots, req_extra, \
         grover_depths[idx]
 
-def qae_new(probability, max_grover_depth, eps, delta, jittigate=False):
+def qae_new(probability, max_grover_depth, eps, delta, Nshot=None, \
+    jittigate=False):
     grover_depths, shot_scales = calc_depths(max_grover_depth, \
         jittigate=jittigate)
-    shots = calculate_Nshot(max_grover_depth, eps, delta, jittigate=jittigate)
+    if Nshot is None:
+        shots = calculate_Nshot(max_grover_depth, eps, delta, \
+            jittigate=jittigate)
+    else:
+        shots = Nshot
     shots_array = np.array([int(np.ceil(x)) for x in (shots*shot_scales)])
     total_shots, total_calls = 0, 0
     zeros = []
