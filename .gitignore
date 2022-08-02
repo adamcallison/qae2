@@ -121,3 +121,5 @@ docs/_autosummary/
 *.ipynb_checkpoints/
 
 \.vscode/
+
+*.h5
