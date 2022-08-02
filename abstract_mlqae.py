@@ -250,7 +250,55 @@ def calc_depths(maxdepth, jittigate=False):
         shot_scales = np.ones(len(mks))
     return mks, shot_scales
 
-def jitter_depths(depths_nojitter):
+def jitter_depths(depths_nojitter, donly=False):
+    if not donly:
+        return _jitter_depths2(depths_nojitter)
+    depths = list(depths_nojitter)[:-1]
+    depth = depths_nojitter[-1]
+    shot_scales = [1.0]*len(depths)
+    dspread = int(np.round(np.log(2*depth)))
+    new_depths = list(range(depth-dspread, depth+1))
+    new_shot_scales = [1/len(new_depths)]*len(new_depths)
+    depths = np.array(depths + new_depths)
+    shot_scales = np.array(shot_scales + new_shot_scales)
+    return depths, shot_scales
+
+def _jitter_depths2(depths_nojitter):
+    c = 2.0
+    depths_nojitter = list(np.sort(depths_nojitter))
+    depths_nojitter_rev = depths_nojitter[::-1]
+    depths_rev, shot_scales_rev = [], []
+    for j, depth_njr in enumerate(depths_nojitter_rev):
+        if depth_njr == 0:
+            jittigate_now = False
+        elif j == 0:
+            dspread = np.max((int(np.round(np.log(c*depth_njr))), 0))
+            lowerd, upperd = depth_njr-dspread, depth_njr
+            jittigate_now = lowerd > (depths_nojitter_rev[j+1]+1)
+        elif j < len(depths_nojitter_rev) - 1:
+            dspread = np.max((int(np.round(np.log(c*depth_njr))), 0))
+            lowerd, upperd = depth_njr-dspread, depth_njr+dspread 
+            jittigate_now = (lowerd > (depths_nojitter_rev[j+1]+1)) and (upperd < (depths_rev[-1]-1))
+        else:
+            dspread = np.max((int(np.round(np.log(c*depth_njr))), 0))
+            lowerd, upperd = np.max((depth_njr-dspread, 0)), depth_njr+dspread
+            jittigate_now = upperd > (depths_rev[-1]-1)
+    
+        if jittigate_now:
+            new_depthsr = list(range(upperd, (lowerd)-1, -1))
+            new_shot_scalesr = [1/len(new_depthsr)]*len(new_depthsr)
+            depths_rev = depths_rev + new_depthsr
+            shot_scales_rev = shot_scales_rev + new_shot_scalesr
+        else:
+            depths_rev = depths_rev + [depth_njr]
+            shot_scales_rev = shot_scales_rev + [1.0]
+
+    depths = np.array(depths_rev[::-1])
+    shot_scales = np.array(shot_scales_rev[::-1])
+
+    return depths, shot_scales
+
+def _jitter_depths(depths_nojitter):
     jittigate_now = False
     shot_scales = []
     depths = []
