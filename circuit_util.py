@@ -3,6 +3,13 @@ from qiskit.compiler import transpile
 import mcnot
 
 def zero_projector_circuit(n):
+    """Generates the circuit for the zero projection operator
+
+    Parameters
+    ----------
+    n : int
+        number of qubits
+    """
     qc_qubits = QuantumRegister(n, 'q')
     qc = QuantumCircuit(qc_qubits)
     for j in range(n):
@@ -16,6 +23,20 @@ def zero_projector_circuit(n):
     return qc
 
 def Q_circuit(A, O):
+    """Generates Q operator circuit for QAE
+
+    Parameters
+    ----------
+    A : quantum circuit
+        The algorithm whose amplitude is being estimated
+    O : quantum circuit
+        The good-state oracle for the qae algorithm
+
+    Returns
+    -------
+    qc : quantum circuit
+        The generated Q operator circuit
+    """
     # not currently supporting ancillae on A or O
     nqubits = len(A.qubits)
     Ai = A.inverse()
@@ -34,6 +55,26 @@ def Q_circuit(A, O):
     return qc
 
 def qae_circuits(A, O, grover_depths, measure_qubits, compile_to=None):
+    """Generates MLQAE circuits
+
+    Parameters
+    ----------
+    A : quantum circuit
+        The algorithm whose amplitude is being estimated
+    O : quantum circuit
+        The good-state oracle for the qae algorithm
+    grover_depths: iterable
+        The grover depth (number of Q applications) to generate circiuits for
+    measure_qubits: iterable of int
+        The qubit indices to measure at the end of circuits
+    compile_to: backend, optinal
+        The backend to compile to. If None, just comes to 'u' and 'cx' gates
+
+    Returns
+    -------
+    circuits : list of quantum circuit
+        The generated circuits in the same order as grover_depths
+    """
     # not currently supporting ancillae on A or O
     nqubits = len(A.qubits)
     Qqc = Q_circuit(A, O)

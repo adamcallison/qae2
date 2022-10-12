@@ -3,6 +3,8 @@ from qiskit.circuit.library import MCMT
 import numpy as np
 
 def build_ccx_from_cx():
+    """Generate ccx gate from cnot and single-qubit gates
+    """
     qc_qubits = QuantumRegister(3, 'q')
     qc = QuantumCircuit(qc_qubits)
 
@@ -16,16 +18,23 @@ def build_ccx_from_cx():
     qc.cx(2, 0)
     qc.t(0)
     qc.h(0)
-    #qc.barrier()
     qc.t(1)
     qc.cx(2, 1)
     qc.tdg(1)
     qc.cx(2, 1)
-    #qc.barrier()
     qc.t(2)
     return qc
 
 def build_cccx_from_toffolis(ugate_only=False, barriers=False):
+    """Generate cccx gate from toffoli, cnot and single-qubit gates
+
+    Parameters
+    ----------
+    ugate_only : bool, optional
+        If True, only the generic 'u' gate is used for single-qubit gates
+    barriers : bool, optional
+        If True, barriers will be added to circuit for clarity
+    """
     qc_qubits = QuantumRegister(4, 'q')
     qc = QuantumCircuit(qc_qubits)
 
@@ -88,6 +97,18 @@ def build_cccx_from_toffolis(ugate_only=False, barriers=False):
     return qc
 
 def build_mcnot(n, base='toffoli', ugate_only=False):
+    """Generate a multi-controlled not gate
+
+    Parameters
+    ----------
+    n : int
+        The number of controls. If n=1, cnot is used. If n=2, toffoli is used.
+        If n=3 and base='toffoli', a toffoli decomposition of cccx is used.
+        In all other cases, MCMT is used
+    base : str, optional, 'toffoli' or 'cccx'
+    ugate_only : bool, optional
+        If True, only the generic 'u' gate is used for single-qubit gates
+    """
     base = base.lower()
     qc = QuantumCircuit(n+1)
     if n == 1:
@@ -102,6 +123,20 @@ def build_mcnot(n, base='toffoli', ugate_only=False):
     return qc
 
 def build_mcnot_decomp(n, base='cccx_toffoli', ugate_only=False):
+    """Generate a multi-controlled not gate via a recursive decomposition with
+    ancillas
+
+    Parameters
+    ----------
+    n : int
+        The number of controls.
+    base : str, optional, 'cccx_toffoli', 'toffoli' or 'cccx'. 
+        The base of the recursive strategy.
+        If base='cccx_toffoli', cccx is used as the base, but it is then 
+        decomposed directly to toffolis.
+    ugate_only : bool, optional
+        If True, only the generic 'u' gate is used for single-qubit gates
+    """
     base = base.lower()
     if base in ('cccx_toffoli', 'toffoli_cccx'):
         recursive_base, decomp_base = 'cccx', 'toffoli'
@@ -147,6 +182,30 @@ def build_mcnot_decomp(n, base='cccx_toffoli', ugate_only=False):
 
 def append_mcnot(qc, target, controls, base='cccx_toffoli', ugate_only=False, \
     reusable_ancillas=None, new_ancilla_name=None):
+    """Append a recursively-decomposed multi-controlled not gate to a circuit
+
+    Parameters
+    ----------
+    qc : quantum circuit
+        The circuit to append the mcnot to
+    target : int
+        The index of the target qubit
+    controls : iterable of int
+        The indices of the control qubits
+    base : str, optional, 'cccx_toffoli', 'toffoli' or 'cccx'. 
+        The base of the recursive strategy.
+    ugate_only : bool, optional
+        If True, only the generic 'u' gate is used for single-qubit gates
+    reusable_ancillas : list of int, optional
+        Indices of existing ancilla qubits that may be reused
+    new_ancilla_name : str, optional
+        Name of new ancilla register if one must be added
+
+    Returns
+    -------
+    qc : quantum circuit
+        Copy of input qc with the mcnot appended
+    """
     qc = qc.copy()
     if reusable_ancillas is None:
         reusable_ancillas = []
