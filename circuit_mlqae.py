@@ -79,7 +79,6 @@ def max_log_likelihood_kappa(grover_depths, eps, kappa_params, shots, zeros):
     thetas, kappas, ll = log_likelihood_kappa(grover_depths, eps, \
         kappa_params, shots, zeros)
     idx = np.unravel_index(np.argmax(ll), ll.shape)
-    print(idx)
     theta = thetas[idx[0]]
     kappa = kappas[idx[1]]
     return theta, kappa
