@@ -1,7 +1,7 @@
 import numpy as np
-import abstract_qae
 from scipy.special import erfinv, erf
 import scipy.interpolate as spi
+from scipy.stats import binom
 
 def log_likelihood(grover_depths, eps, shots, zeros):
     eps_use = eps/3
@@ -37,7 +37,8 @@ def max_log_likelihood2(grover_depths, eps, shots, zeros):
         D = (2*grover_depth) + 1
  
         if j == 0:
-            thetas_curr = np.arange(eps_use, (np.pi/2)-eps_use+eps_curr, eps_curr)
+            thetas_curr = np.arange(eps_use, (np.pi/2)-eps_use+eps_curr, \
+                eps_curr)
             ll = zeros[j]*np.log(np.sin(D*thetas_curr)**2)
             ll += ones[j]*np.log(np.cos(D*thetas_curr)**2)
         elif j < 3:
@@ -51,7 +52,8 @@ def max_log_likelihood2(grover_depths, eps, shots, zeros):
             theta_curr_min = np.max( (theta_curr - (eps_curr*50), eps_use) )
             theta_curr_max = np.min( (theta_curr + (eps_curr*50), np.pi/2) )
             thetas_curr = np.arange(theta_curr_min, theta_curr_max, eps_curr)
-            ll = spi.interp1d(thetas_old, ll_old, kind='cubic', fill_value="extrapolate")(thetas_curr)
+            ll = spi.interp1d(thetas_old, ll_old, kind='cubic', \
+                fill_value="extrapolate")(thetas_curr)
             ll += zeros[j]*np.log(np.sin(D*thetas_curr)**2)
             ll += ones[j]*np.log(np.cos(D*thetas_curr)**2)
 
@@ -66,126 +68,7 @@ def max_log_likelihood(grover_depths, eps, shots, zeros):
     theta = thetas[idx]
     return theta
 
-def qae_original(probability, max_grover_depth, eps, delta, shot_scale=1.0):
-    shots = calculate_Nshot(max_grover_depth, eps, delta)
-    shots = int(np.ceil(shots*shot_scale))
-    grover_depths = calc_depths(max_grover_depth)
-    total_shots, total_calls = 0, 0
-    zeros = []
-    for j, grover_depth in enumerate(grover_depths):
-        D = (2*grover_depth) + 1
-        total_shots += shots
-        total_calls += D*shots
-        zerosd = abstract_qae.grover_from_probability(probability, \
-            grover_depth, shots)
-        zeros.append(zerosd)
-    zeros = np.array(zeros)
-    shots_array = np.array([shots]*len(grover_depths))
-    theta_est = max_log_likelihood(grover_depths, eps, shots_array, zeros)
-    probability_est = abstract_qae.probability_from_theta(theta_est)
-    return probability_est, total_shots, total_calls, shots
-
-def qae_pinpoint(probability, max_grover_depth, eps, delta_in):
-    # may need to adjust delta?
-    grover_depths = calc_depths(max_grover_depth)
-    delta = 1-((1-delta_in)**(1/len(grover_depths)))
-    Ds = (2*grover_depths)+1
-    shots_array = []
-    for j, grover_depth in enumerate(grover_depths):
-        if grover_depth == 0:
-            eps_tmp = np.pi/(4*Ds[j+1])
-            shots = np.log(2/delta)/(2*(eps_tmp**2))
-            shots = int(np.ceil(shots))
-            shots_array.append(shots)
-        elif grover_depth == grover_depths[-1]:
-            eps_tmp = eps*Ds[j]
-            shots = np.log(2/delta)/(2*(eps_tmp**2))
-            shots = int(np.ceil(shots))
-            shots_array.append(shots)
-        else:
-            eps_tmp = ( np.pi/(4*Ds[j+1]) )*Ds[j]
-            shots = np.log(2/delta)/(2*(eps_tmp**2))
-            shots = int(np.ceil(shots))
-            shots_array.append(shots)
-    shots_array = np.array(shots_array)
-
-    total_shots, total_calls = 0, 0
-    zeros = []
-    for j, grover_depth in enumerate(grover_depths):
-        D = (2*grover_depth) + 1
-        total_shots += shots_array[j]
-        total_calls += D*shots_array[j]
-        zerosd = abstract_qae.grover_from_probability(probability, \
-            grover_depth, shots_array[j])
-        zeros.append(zerosd)
-    zeros = np.array(zeros)
-    theta_est = max_log_likelihood(grover_depths, eps, shots_array, zeros)
-    probability_est = abstract_qae.probability_from_theta(theta_est)
-    return probability_est, total_shots, total_calls, shots_array
-
-def qae_disambiguate(probability, max_grover_depth, eps, delta):
-    # tries to reuse previous shots to disambiguate the final step
-    shots = calculate_Nshot(max_grover_depth, eps, delta)
-    grover_depths = calc_depths(max_grover_depth)
-    total_shots, total_calls = 0, 0
-    zeros = []
-    for j, grover_depth in enumerate(grover_depths):
-        D = (2*grover_depth) + 1
-        total_shots += shots
-        total_calls += D*shots
-        zerosd = abstract_qae.grover_from_probability(probability, \
-            grover_depth, shots)
-        zeros.append(zerosd)
-    zeros = np.array(zeros)
-    shots_array = np.array([shots]*len(grover_depths))
-    theta_est = max_log_likelihood(grover_depths, eps, shots_array, zeros)
-    probability_est = abstract_qae.probability_from_theta(theta_est)
-
-    D = (2*grover_depths[-1])+1
-    lines = np.array([j*np.pi/(2*D)])
-    idx = np.argmin(np.abs(theta_est - lines))
-    closest_line = lines[idx]
-    distance = np.abs(theta_est - closest_line)
-    direction = np.sign(theta_est - closest_line)
-    if distance < eps:
-        probability_est_out = probability_est
-        req_extra, idx = 0, 0
-    else:
-        theta_est_other = closest_line - (direction*distance)
-        ps, p_others, pdiffs, reqs, req_calls = [], [], [], [], []
-        for j, grover_depth in enumerate(grover_depths):
-            D = (2*grover_depth) + 1
-            p, p_other = np.sin(theta_est*D)**2, np.sin(theta_est_other*D)**2
-            pdiff = np.abs(p-p_other)
-            req = np.log(2/delta)/(2*(((pdiff))**2))
-            req_call = req*D
-            ps.append(p), p_others.append(p_other)
-            pdiffs.append(pdiff), reqs.append(req), req_calls.append(req_call)
-        idx = np.argmin(req_calls)
-        req_extra = reqs[idx] - shots_array[idx]
-        if req_extra <= 0:
-            zeros_disambiguate = zeros[idx]
-            shots_disambiguate = shots_array[idx]
-        else:
-            req_extra = int(np.ceil(req_extra))
-            new_zeros = abstract_qae.grover_from_probability(probability, \
-            grover_depths[idx], req_extra)
-            total_shots += req_extra
-            total_calls += req_extra*((2*grover_depths[idx])+1)
-            zeros_disambiguate = zeros[idx] + new_zeros
-            shots_disambiguate = shots_array[idx] + req_extra
-        p_disambiguate = zeros_disambiguate/shots_disambiguate
-        if np.abs(p_disambiguate-ps[idx]) < \
-            np.abs(p_disambiguate-p_others[idx]):
-            probability_est_out = probability_est
-        else:
-            probability_est_other = np.sin(theta_est_other)**2
-            probability_est_out = probability_est_other
-
-    return probability_est_out, total_shots, total_calls, shots, req_extra, \
-        grover_depths[idx]
-
-def qae_new(probability, max_grover_depth, eps, delta, Nshot=None, \
+def qae(probability, max_grover_depth, eps, delta, Nshot=None, \
     jittigate=False):
     grover_depths, shot_scales = calc_depths(max_grover_depth, \
         jittigate=jittigate)
@@ -203,33 +86,12 @@ def qae_new(probability, max_grover_depth, eps, delta, Nshot=None, \
         D = (2*grover_depth) + 1
         total_shots += shots_array[j]
         total_calls += D*shots_array[j]
-        zerosd = abstract_qae.grover_from_probability(probability, \
+        zerosd = grover_from_probability(probability, \
             grover_depth, shots_array[j])
         zeros.append(zerosd)
     zeros = np.array(zeros)
     theta_est = max_log_likelihood(grover_depths, eps, shots_array, zeros)
-    probability_est = abstract_qae.probability_from_theta(theta_est)
-    return probability_est, total_shots, total_calls, shots
-
-def qae_new2(probability, max_grover_depth, eps, delta, jittigate=False):
-    grover_depths, shot_scales = calc_depths(max_grover_depth, \
-        jittigate=jittigate)
-    shots = calculate_Nshot(max_grover_depth, eps, delta, jittigate=jittigate)
-    shots_array = np.array([int(np.ceil(x)) for x in (shots*shot_scales)])
-    total_shots, total_calls = 0, 0
-    zeros = []
-    grover_depths = np.array(grover_depths)
-    shots_array = np.array(shots_array)
-    for j, grover_depth in enumerate(grover_depths):
-        D = (2*grover_depth) + 1
-        total_shots += shots_array[j]
-        total_calls += D*shots_array[j]
-        zerosd = abstract_qae.grover_from_probability(probability, \
-            grover_depth, shots_array[j])
-        zeros.append(zerosd)
-    zeros = np.array(zeros)
-    theta_est = max_log_likelihood2(grover_depths, eps, shots_array, zeros)
-    probability_est = abstract_qae.probability_from_theta(theta_est)
+    probability_est = probability_from_theta(theta_est)
     return probability_est, total_shots, total_calls, shots
 
 def calc_depths(maxdepth, jittigate=False):
@@ -283,7 +145,8 @@ def _jitter_depths2(depths_nojitter):
         elif j < len(depths_nojitter_rev) - 1:
             dspread = np.max((int(np.round(np.log(c*depth_njr))), 0))
             lowerd, upperd = depth_njr-dspread, depth_njr+dspread 
-            jittigate_now = (lowerd > (depths_nojitter_rev[j+1]+1)) and (upperd < (depths_rev[-1]-1))
+            jittigate_now = (lowerd > (depths_nojitter_rev[j+1]+1)) and \
+                (upperd < (depths_rev[-1]-1))
         else:
             dspread = np.max((int(np.round(np.log(c*depth_njr))), 0))
             lowerd, upperd = np.max((depth_njr-dspread, 0)), depth_njr+dspread
@@ -356,3 +219,27 @@ def calculate_eps(maxdepth, Nshot, delta, jittigate=False):
     num = erfinv(1-delta)
     denom = np.sqrt(2) * S2(maxdepth, jittigate=jittigate) * np.sqrt(Nshot)
     return num/denom
+
+def theta_from_probability(probability):
+    return np.arcsin(np.sqrt(probability))
+
+def amplitified_theta(theta, grover_depth):
+    D = (2*grover_depth)+1
+    return D*theta
+
+def amplified_probability(probability, grover_depth):
+    theta = theta_from_probability(probability)
+    amp_theta = amplitified_theta(theta, grover_depth)
+    return np.sin(amp_theta)**2
+
+def measure_from_probability(probability, shots):
+    p_0, p_1 = 1-probability, probability
+    zeros = binom.rvs(shots, p_1)
+    return zeros
+
+def grover_from_probability(probability, grover_depth, shots):
+    amp_probability = amplified_probability(probability, grover_depth)
+    return measure_from_probability(amp_probability, shots)
+
+def probability_from_theta(theta):
+    return np.sin(theta)**2
