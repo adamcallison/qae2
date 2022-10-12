@@ -2,6 +2,62 @@ import numpy as np
 from scipy.special import erfinv, erf
 import scipy.interpolate as spi
 
+import abstract_mlqae
+import warnings
+
+def qae(qaetype, qae_inputs, zerocounts_function, max_grover_depth, eps, \
+    delta, Nshot=None, shot_multiplier=None, jittigate=False, noise_rate=None, \
+    kappa_params=None, compile_to=None):
+    qaetype = qaetype.lower()
+
+    if not qaetype in ('abstract', 'circuit'):
+        raise ValueError(f"invalid qaetype: {qaetype}")
+
+    if qaetype == 'abstract':
+        if not (compile_to is None):
+            raise ValueError("can't compile abstract mlqae")
+
+        if not (noise_rate is None):
+            raise NotImplementedError("noise_rate not supported for "\
+                "abstract mlqae")
+
+        if not (kappa_params is None):
+            raise NotImplementedError("kappa_params not supported for "\
+                "abstract mlqae")
+
+    grover_depths, shot_scales = calc_depths(max_grover_depth, \
+        jittigate=jittigate)
+
+    if Nshot is None:
+        shots = calculate_Nshot(max_grover_depth, eps, delta, \
+            jittigate=jittigate)
+    else:
+        shots = Nshot
+    if not shot_multiplier == None:
+        shots = int(np.ceil(shot_multiplier*shots))
+    shots_array = np.array([int(np.ceil(x)) for x in (shots*shot_scales)])
+
+    if qaetype == 'circuit':
+        shots_array = np.array([np.max(shots_array)]*len(shots_array))
+        warnings.warn("due to qiskit IBMQ limitations, maximum shot number"\
+        " will be used for all circuits")
+
+    grover_depths = np.array(grover_depths)
+
+    zeros, total_shots, total_calls = zerocounts_function(qae_inputs, \
+        grover_depths, shots_array, noise_rate=noise_rate, \
+        compile_to=compile_to)
+
+    if not (kappa_params is None):
+        theta_est, kappa_est = max_log_likelihood_kappa(grover_depths, eps, \
+            kappa_params, shots_array, zeros)
+        probability_est = probability_from_theta(theta_est)
+        return probability_est, kappa_est, total_shots, total_calls, shots
+    else:
+        theta_est = max_log_likelihood(grover_depths, eps, shots_array, zeros)
+        probability_est = probability_from_theta(theta_est)
+        return probability_est, total_shots, total_calls, shots
+
 def probability_from_theta(theta):
     return np.sin(theta)**2
 
@@ -69,6 +125,30 @@ def max_log_likelihood(grover_depths, eps, shots, zeros):
     idx = np.argmax(ll)
     theta = thetas[idx]
     return theta
+
+def log_likelihood_kappa(grover_depths, eps, kappa_params, shots, zeros):
+    eps_use = eps/3
+    ones = shots - zeros
+    thetas = np.arange(eps_use, np.pi/2, eps_use)
+    kappa_max, kappa_fineness = kappa_params
+    kappas = np.arange(0.0, kappa_max+kappa_fineness, kappa_fineness)
+    ll = np.zeros((thetas.shape[0], kappas.shape[0]))
+    for j, grover_depth in enumerate(grover_depths):
+        D = (2*grover_depth) + 1
+        zterm = 0.5 - (0.5*np.exp(-kappas*grover_depth)*\
+            np.cos(2*D*thetas[:, None]))
+        oterm = 1.0 - zterm
+        ll += zeros[j]*np.log(zterm)
+        ll += ones[j]*np.log(oterm)
+    return thetas, kappas, ll
+
+def max_log_likelihood_kappa(grover_depths, eps, kappa_params, shots, zeros):
+    thetas, kappas, ll = log_likelihood_kappa(grover_depths, eps, \
+        kappa_params, shots, zeros)
+    idx = np.unravel_index(np.argmax(ll), ll.shape)
+    theta = thetas[idx[0]]
+    kappa = kappas[idx[1]]
+    return theta, kappa
 
 def calc_depths(maxdepth, jittigate=False):
     if maxdepth == 0:
