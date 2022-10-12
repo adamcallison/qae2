@@ -1,5 +1,5 @@
 import numpy as np 
-from abstract_mlqae import calc_depths, calculate_Nshot, max_log_likelihood, \
+from mlqae import calc_depths, calculate_Nshot, max_log_likelihood, \
     probability_from_theta
 import circuit_util
 from qiskit.providers.aer import AerSimulator
@@ -57,7 +57,6 @@ def qae(A, O, measure_qubits, results_to_good_count_func, max_grover_depth, \
         theta_est = max_log_likelihood(grover_depths, eps, shots_array, zeros)
         probability_est = probability_from_theta(theta_est)
         return probability_est, total_shots, total_calls, shots
-
 
 def log_likelihood_kappa(grover_depths, eps, kappa_params, shots, zeros):
     eps_use = eps/3
