@@ -219,7 +219,8 @@ def append_mcnot(qc, target, controls, base='cccx_toffoli', ugate_only=False, \
             qc_ancillas_extra = AncillaRegister(nancillas_extra)
         
         else:
-            qc_ancillas_extra = AncillaRegister(nancillas_extra, new_ancilla_name)
+            qc_ancillas_extra = AncillaRegister(nancillas_extra, \
+                new_ancilla_name)
         qc.add_register(qc_ancillas_extra)
         current_nqubits = len(qc.qubits)
         composequbits = [target] + list(controls) + list(reusable_ancillas) + \

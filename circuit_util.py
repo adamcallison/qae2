@@ -1,6 +1,13 @@
-from qiskit import QuantumCircuit, QuantumRegister, AncillaRegister, ClassicalRegister
-from qiskit.compiler import transpile
+from qiskit import QuantumCircuit, QuantumRegister, AncillaRegister, \
+    ClassicalRegister, transpile
 import mcnot
+
+iqs_bg = ['u1', 'u2', 'u3', 'u', 'p', 'r', 'rx', 'ry', 'rz', 'cx', 'cy', 'cz', \
+    'csx', 'cp', 'id', 'x', 'y', 'z', 'h', 's', 'sdg', 'sx', 't', 'tdg', \
+    'swap', 'ccx', 'cswap', 'unitary', 'diagonal', 'initialize', 'cu1', 'cu2', \
+    'cu3', 'rxx', 'ryy', 'rzz', 'rzx', 'mcx', 'mcy', 'mcz', 'mcsx', 'mcp', \
+    'mcu1', 'mcu2', 'mcu3', 'mcrx', 'mcry', 'mcrz', 'mcr', 'mcswap', \
+    'multiplexer', 'kraus', 'delay', 'roerror']
 
 def zero_projector_circuit(n):
     """Generates the circuit for the zero projection operator
@@ -10,7 +17,7 @@ def zero_projector_circuit(n):
     n : int
         number of qubits
     """
-    qc_qubits = QuantumRegister(n, 'q')
+    qc_qubits = QuantumRegister(n)
     qc = QuantumCircuit(qc_qubits)
     for j in range(n):
         qc.x(j)
@@ -44,8 +51,8 @@ def Q_circuit(A, O):
     zpc = zero_projector_circuit(nqubits)
     nancillas = len(zpc.ancillas)
 
-    qc_qubits = QuantumRegister(nqubits, 'q')
-    qc_ancillas = AncillaRegister(nancillas, 'ancilla')
+    qc_qubits = QuantumRegister(nqubits)
+    qc_ancillas = AncillaRegister(nancillas)
     qc = QuantumCircuit(qc_qubits, qc_ancillas)
 
     qc = qc.compose(O, qubits=list(range(nqubits)))
@@ -81,10 +88,13 @@ def qae_circuits(A, O, grover_depths, measure_qubits, compile_to=None):
     nancillas = len(Qqc.ancillas)
     nclbits = len(measure_qubits)
 
-    qc_qubits = QuantumRegister(nqubits, 'q')
-    qc_ancillas = AncillaRegister(nancillas, 'ancilla')
-    qc_classical = ClassicalRegister(nclbits, 'classical')
-    qc = QuantumCircuit(qc_qubits, qc_ancillas, qc_classical)
+    qc_qubits = QuantumRegister(nqubits, 'qubits')
+    qc_ancillas = AncillaRegister(nancillas, 'ancillas')
+    qc_classical = ClassicalRegister(nclbits, 'clbits')
+    if nancillas > 0:
+        qc = QuantumCircuit(qc_qubits, qc_ancillas, qc_classical)
+    else:
+        qc = QuantumCircuit(qc_qubits, qc_classical)
 
     qc = qc.compose(A, qubits=list(range(nqubits)))
 
@@ -99,7 +109,6 @@ def qae_circuits(A, O, grover_depths, measure_qubits, compile_to=None):
         if not compile_to is None:
             qcgd = transpile(qcgd, backend=compile_to)
         else:
-            # need to transpile as AerSimulator doesn't support cry???
-            qcgd = transpile(qcgd, basis_gates=['cx', 'u'])
+            qcgd = transpile(qcgd, basis_gates=iqs_bg)
         circuits.append(qcgd)
     return circuits
