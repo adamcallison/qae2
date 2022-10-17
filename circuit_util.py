@@ -52,8 +52,11 @@ def Q_circuit(A, O):
     nancillas = len(zpc.ancillas)
 
     qc_qubits = QuantumRegister(nqubits)
-    qc_ancillas = AncillaRegister(nancillas)
-    qc = QuantumCircuit(qc_qubits, qc_ancillas)
+    if nancillas > 0:
+        qc_ancillas = AncillaRegister(nancillas)
+        qc = QuantumCircuit(qc_qubits, qc_ancillas)
+    else:
+        qc = QuantumCircuit(qc_qubits)
 
     qc = qc.compose(O, qubits=list(range(nqubits)))
     qc = qc.compose(Ai, qubits=list(range(nqubits)))
@@ -89,9 +92,9 @@ def qae_circuits(A, O, grover_depths, measure_qubits, compile_to=None):
     nclbits = len(measure_qubits)
 
     qc_qubits = QuantumRegister(nqubits, 'qubits')
-    qc_ancillas = AncillaRegister(nancillas, 'ancillas')
     qc_classical = ClassicalRegister(nclbits, 'clbits')
     if nancillas > 0:
+        qc_ancillas = AncillaRegister(nancillas, 'ancillas')
         qc = QuantumCircuit(qc_qubits, qc_ancillas, qc_classical)
     else:
         qc = QuantumCircuit(qc_qubits, qc_classical)

@@ -162,8 +162,11 @@ def build_mcnot_decomp(n, base='cccx_toffoli', ugate_only=False):
     total_ancilla_qubits = len(qc_bottom.ancillas) + 1
     total_data_qubits = total_qubits - total_ancilla_qubits
     qc_qubits = QuantumRegister(total_data_qubits)
-    qc_ancilla = AncillaRegister(total_ancilla_qubits)
-    qc = QuantumCircuit(qc_qubits, qc_ancilla)
+    if total_ancilla_qubits > 0:
+        qc_ancilla = AncillaRegister(total_ancilla_qubits)
+        qc = QuantumCircuit(qc_qubits, qc_ancilla)
+    else:
+        qc = QuantumCircuit(qc_qubits)
 
     if recursive_base == 'cccx':
         composequbits_top = [total_qubits-1, total_data_qubits-3, \
@@ -217,7 +220,6 @@ def append_mcnot(qc, target, controls, base='cccx_toffoli', ugate_only=False, \
     if nancillas_extra > 0:
         if new_ancilla_name is None:
             qc_ancillas_extra = AncillaRegister(nancillas_extra)
-        
         else:
             qc_ancillas_extra = AncillaRegister(nancillas_extra, \
                 new_ancilla_name)
